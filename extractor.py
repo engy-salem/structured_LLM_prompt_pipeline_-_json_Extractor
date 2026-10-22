@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from prompts import build_prompt
 from schemas import InvoiceData, ResumeData
 
+
 SCHEMAS = {
     "invoice": InvoiceData,
     "resume": ResumeData,
@@ -69,14 +70,12 @@ def extract_document(
 
         client = genai.Client(api_key=api_key)
 
-    
-response = generate_with_retry(
-    client=client,
-    model=model,
-    prompt=prompt,
-    response_schema=schema.model_json_schema(),
-)
-
+    response = generate_with_retry(
+        client=client,
+        model=model,
+        prompt=prompt,
+        response_schema=schema.model_json_schema(),
+    )
 
     if not response.text:
         raise ValueError("Gemini returned an empty response.")
@@ -84,15 +83,9 @@ response = generate_with_retry(
     try:
         raw_data = json.loads(response.text)
     except json.JSONDecodeError as error:
-        raise ValueError(
-            "Gemini returned invalid JSON."
-        ) from error
+        raise ValueError("Gemini returned invalid JSON.") from error
 
-    try:
-        validated_data = schema.model_validate(raw_data)
-    except ValidationError:
-        raise
-
+    validated_data = schema.model_validate(raw_data)
     return validated_data
 
 
@@ -101,7 +94,10 @@ def main():
         "Enter document type (invoice/resume): "
     ).strip().lower()
 
-    print("Enter the document text. Type END on a new line to finish:")
+    print(
+        "Enter the document text. "
+        "Type END on a new line to finish:"
+    )
 
     lines = []
 
@@ -126,6 +122,9 @@ def main():
 
     except (ValueError, ValidationError) as error:
         print(f"Extraction failed: {error}")
+
+    except errors.APIError as error:
+        print(f"Gemini API request failed: {error}")
 
 
 if __name__ == "__main__":
