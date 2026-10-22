@@ -111,3 +111,40 @@ def test_unsupported_document_type_is_rejected():
 
     assert client.models.last_request is None
 
+
+from unittest.mock import Mock
+
+from google.genai import errors
+
+from extractor import generate_with_retry
+
+
+def test_retry_succeeds_after_temporary_errors(monkeypatch):
+    client = Mock()
+
+    temporary_error = errors.APIError(
+        503,
+        {"error": {"message": "Temporary server error"}},
+        None,
+    )
+
+    expected_response = Mock()
+    client.models.generate_content.side_effect = [
+        temporary_error,
+        temporary_error,
+        expected_response,
+    ]
+
+    monkeypatch.setattr("extractor.time.sleep", lambda _: None)
+    monkeypatch.setattr("extractor.random.uniform", lambda a, b: 0)
+
+    response = generate_with_retry(
+        client=client,
+        model="test-model",
+        prompt="Test prompt",
+        response_schema={"type": "object"},
+        max_attempts=3,
+    )
+
+    assert response is expected_response
+    assert client.models.generate_content.call_count == 3
