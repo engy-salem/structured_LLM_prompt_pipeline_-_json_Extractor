@@ -14,8 +14,7 @@ SCHEMAS = {
     "resume": ResumeData,
 }
 
-DEFAULT_MODEL = "gemini-3.5-flash"
-
+DEFAULT_MODEL = "gemini-flash-lite-latest"
 
 def extract_document(
     document_type: str,
