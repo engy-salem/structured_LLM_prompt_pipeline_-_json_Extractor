@@ -1,13 +1,15 @@
 
 import json
 import os
+import random
+import time
 
 from google import genai
+from google.genai import errors
 from pydantic import ValidationError
 
 from prompts import build_prompt
 from schemas import InvoiceData, ResumeData
-
 
 SCHEMAS = {
     "invoice": InvoiceData,
@@ -15,6 +17,38 @@ SCHEMAS = {
 }
 
 DEFAULT_MODEL = "gemini-flash-lite-latest"
+
+
+def generate_with_retry(
+    client,
+    model: str,
+    prompt: str,
+    response_schema: dict,
+    max_attempts: int = 3,
+):
+    for attempt in range(max_attempts):
+        try:
+            return client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_json_schema": response_schema,
+                },
+            )
+
+        except errors.APIError as error:
+            retryable = (
+                error.code == 429
+                or error.code in (500, 502, 503, 504)
+            )
+
+            if not retryable or attempt == max_attempts - 1:
+                raise
+
+            delay = min(2 ** attempt, 8) + random.uniform(0, 0.5)
+            time.sleep(delay)
+
 
 def extract_document(
     document_type: str,
@@ -35,14 +69,14 @@ def extract_document(
 
         client = genai.Client(api_key=api_key)
 
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config={
-            "response_mime_type": "application/json",
-            "response_json_schema": schema.model_json_schema(),
-        },
-    )
+    
+response = generate_with_retry(
+    client=client,
+    model=model,
+    prompt=prompt,
+    response_schema=schema.model_json_schema(),
+)
+
 
     if not response.text:
         raise ValueError("Gemini returned an empty response.")
